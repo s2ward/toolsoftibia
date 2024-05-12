@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8" />
+<meta name="description" content="npsearch is an advanced tool for searching and browsing NPC transcripts" />
+<meta name="robots" content="index, follow" />
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=2, shrink-to-fit=yes" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#252525" />
+<meta name="author" content="GABRO" />
+<meta name="designer" content="GABRO" />
+<meta name="owner" content="Cony Island" />
+<meta name="maintainer" content="Cony Island" />
+<meta name="url" content="https://www.talesoftibia.com" />
+
+<link rel="stylesheet" type="text/scss" href="/assets/css/main.scss">
+<link rel="stylesheet" type="text/css" href="/assets/css/tibiastyle.css">
+
+<link href="https://fonts.cdnfonts.com/css/verdana-pro-cond" rel="stylesheet">
+
+<script>
+    localStorage.getItem('darkMode') === 'true' && document.documentElement.setAttribute('data-bs-theme', 'dark');
+</script>
+
+</head>
+<body>
+
+<main class="tibiastyle">
+
+<div class="basicContainer">
+    <div class="responsiveContainer">
+        <div class="contentsContainer">
+
+            <div class="mainBoxContainer">
+                <div class="mainInterfaceLayout">
+                    <div class="interfaceItem">
+                        <div class="windowBox tibiaStyleBackgroundLight tibiaStyleBorderHigh2">
+                            <div
+                                class="windowTitleBar tibiaStyleTitleBarType1 disappearsMobile tibiaStyleBorderBottom tibiaStyleBackgroundDark">
+                                Search Options
+                            </div>
+
+                            <div class="windowContent">
+                                <form name="searchOptionsForm">
+                                    <div class="flexRow spaceAround5P">
+                                        <input id="search-input" class="tibiaStyleInputType1"
+                                            name="searchPhrase" type="text" value=""
+                                            placeholder="Type to search.." />
+                                        <div id="options-button" class="tibiaStyleButtonType1 appearsMobile"
+                                            style="width: 2.7rem; height: 2.7rem; margin-left: 0.5rem">
+                                            <div
+                                                style="width: 2.7rem; height: 2.7rem; background-image: url(/assets/images/ui/gear.svg); background-size: cover; position: absolute; top:0;left:0;">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div id="options"
+                                        class="flexRow disappearsMobile spaceAround5P tibiaStyleBackgroundLight userSelectLock">
+                                        <div class="halfWidth">
+                                            <label class="tibiaStyleCheckBoxContainer">
+                                                Auto Search
+                                                <input id="autoSearch" class="tibiaStyleCheckBoxInput"
+                                                    name="autoSearch" type="checkbox" checked />
+                                                <span class="tibiaStyleCheckBox"></span>
+                                            </label>
+                                            <p class="tibiaStyleParagraph">Search in:</p>
+                                            <label class="tibiaStyleCheckBoxContainer">
+                                                Name
+                                                <input id="npcName" class="tibiaStyleCheckBoxInput"
+                                                    name="searchPhraseInNpcName" type="checkbox" checked />
+                                                <span class="tibiaStyleCheckBox"></span>
+                                            </label>
+                                            <label class="tibiaStyleCheckBoxContainer">
+                                                Response
+                                                <input id="npcDialogue" class="tibiaStyleCheckBoxInput"
+                                                    name="searchPhraseInNpcDialogue" type="checkbox" checked />
+                                                <span class="tibiaStyleCheckBox"></span>
+                                            </label>
+                                            <label class="tibiaStyleCheckBoxContainer">
+                                                Keyword
+                                                <input id="playerDialogue" class="tibiaStyleCheckBoxInput"
+                                                    name="searchPhraseInPlayerDialogue" type="checkbox" checked />
+                                                <span class="tibiaStyleCheckBox"></span>
+                                            </label>
+                                            <br />
+                                            <p class="tibiaStyleParagraph" style="color: #ff9854">Mode</p>
+                                            <label class="tibiaStyleRadioContainer">             
+                                                Search
+                                                <input class="tibiaStyleRadioInput" name="searchMode" value="1"
+                                                    type="radio" checked />
+                                                <span class="tibiaStyleRadio"></span>
+                                            </label>
+                                            <label class="tibiaStyleRadioContainer">
+                                                Browse
+                                                <input class="tibiaStyleRadioInput" name="searchMode" value="2"
+                                                    type="radio" />
+                                                <span class="tibiaStyleRadio"></span>
+                                            </label>
+                                        </div>
+
+                                        <div class="halfWidth">
+                                            <p class="tibiaStyleParagraph">Race:</p>
+                                            <select id="racesList" class="tibiaStyleSelect bottomSpace5M"
+                                                name="searchPhraseByRace">
+                                                <option value="All" selected>All</option>
+                                            </select>
+
+                                            <p class="tibiaStyleParagraph">Location:</p>
+                                            <select id="locationsList" class="tibiaStyleSelect bottomSpace5M"
+                                                name="searchPhraseByLocation">
+                                                <option value="All" selected>All</option>
+                                            </select>
+
+                                            <p class="tibiaStyleParagraph">Job:</p>
+                                            <select id="jobsList" class="tibiaStyleSelect bottomSpace5M"
+                                                name="searchPhraseByJob">
+                                                <option value="All" selected>All</option>
+                                            </select>
+
+                                            <p class="tibiaStyleParagraph">Version:</p>
+                                            <select id="versionsList" class="tibiaStyleSelect"
+                                                name="searchPhraseByVersion">
+                                                <option value="All" selected>All</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="interfaceItem disappearsMobile">
+                        <div class="windowBox tibiaStyleBackgroundLight tibiaStyleBorderHigh2">
+                            <div
+                                class="windowTitleBar tibiaStyleTitleBarType1 tibiaStyleBorderBottom tibiaStyleBackgroundDark">
+                                Information
+                            </div>
+
+                            <div class="windowContent spaceAround5P">
+                                <div class="tibiaStyleBorderDeep1 fullHeight">
+                                    <div class="tabWindowScrollBox scrollWindowContent npcBoxContainer">
+                                    <div id="npc-info" class="npcInformationContainer fullHeight">
+                                        <p class="tibiaStyleParagraph">Click on an NPC image to view more information.</p>
+                                        <br>
+                                        <p class="tibiaStyleParagraph">Search Tips:</p>
+                                        <br>
+                                        <ul>
+                                            <li class="tibiaStyleParagraph">Use single quotes for exact string searches: 'uman-zathroth'.</li>
+                                            <br>
+                                            <li class="tibiaStyleParagraph">Use the AND operator to search for multiple terms: pythius & yalahari.</li>
+                                            <br>
+                                            <li class="tibiaStyleParagraph">Use the OR operator for alternative searches: uman | zathroth.</li>  
+                                        </ul>
+                                        <br>
+                                        <p class="tibiaStyleParagraph">Inspired by tibiasecrets.com's NPC transcription project, which has contributed over 400 NPC transcripts of excellent quality.</p>
+                                        <br>
+                                        <p class="tibiaStyleParagraph">Additional transcripts have been collected and merged from tibia.fandom.com and tibiawiki.com.br.</p>
+                                        <br>
+                                        <p class="tibiaStyleParagraph">Since this project started, over 450 additional transcripts have been documented using hotkey spamming.</p>
+                                        <br><br>
+                                    </div>
+                                    
+                                </div>
+                                
+                                
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="interfaceItem">
+                        <div id="tabContainer_1" class="tabContainer fullHeight fullWidth">
+                            <ul class="tabs windowTabsContent userSelectLock"></ul>
+                            <div
+                                class="tabContent tibiaStyleBackgroundLight tibiaStyleBorderHigh2 spaceAround5P scrollWindow">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</main>
+</body>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+<script src="/assets/js/npsearch.js"></script>

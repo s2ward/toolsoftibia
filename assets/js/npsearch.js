@@ -1,0 +1,826 @@
+// Search engine made by GABRO
+
+// A class for generating and managing window tabs.
+class Tab {
+    static existingTabs = {};
+  
+    constructor(name, active, closable, container, mobile, content) {
+        const KEY = `${name}-${container}`;
+  
+        if (Object.prototype.hasOwnProperty.call(Tab.existingTabs, KEY)) {
+            Tab.existingTabs[KEY].setActive();
+            return;
+        }
+  
+        this.name = name;
+        this.active = active;
+        this.closable = closable;
+        this.container = container;
+        this.mobile = mobile;
+        this.content = content;
+  
+        this.tabElement = null;
+        this.tabContentElement = null;
+  
+        this.createTab();
+        this.enterContent(this.content);
+  
+        Tab.existingTabs[KEY] = this;
+  
+        if (this.active) {
+          this.setActive();
+      }
+    }
+  
+    createTab() {
+        this.tabElement = $(`
+            <li class="tab ${this.mobile ? 'appearsMobile ' : ''}">
+                <span class="tabName">${this.name}</span>
+                ${this.closable ? '<span class="closeTab"></span>' : ''}
+            </li>
+        `);
+  
+        this.tabContentElement = $(`
+            <div class="tabWindow fullHeight"></div>
+        `);
+  
+        this.tabElement.on('click', () => {
+          this.setActive();
+      });
+  
+        if (this.closable) {
+            this.tabElement.find('.closeTab').on('click', (e) => {
+                e.stopPropagation();
+                this.closeTab();
+            });
+        }
+  
+        $(`#${this.container} .tabs`).append(this.tabElement);
+        $(`#${this.container} .tabContent`).append(this.tabContentElement);
+  
+        if (this.active) {
+            this.setActive();
+        }
+    }
+  
+    enterContent(content) {
+        const TAB_WINDOW_CONTAINER = $(`
+            <div class="tabWindowContainer tibiaStyleBorderDeep1 fullHeight">
+                <div class="tabWindowScrollBox scrollWindowContent npcBoxContainer">
+                    ${Array.isArray(content) ? content.map(item => item.outerHTML).join('') : content}
+                </div>
+            </div>
+        `);
+  
+        this.tabContentElement.empty().append(TAB_WINDOW_CONTAINER);
+    }
+  
+    closeTab() {
+        const PREVIOUS_TAB = $(`#${this.container} .tabs li`).first();
+        PREVIOUS_TAB.length > 0 && PREVIOUS_TAB.trigger('click');
+  
+        this.destroyTab();
+    }
+  
+    destroyTab() {
+        this.tabElement.off().remove();
+        this.tabContentElement.off().remove();
+        delete Tab.existingTabs[`${this.name}-${this.container}`];
+        delete this;
+    }
+  
+    setActive() {
+        this.setInactive();
+        this.active = true;
+        this.tabElement.addClass('active');
+        this.tabContentElement.addClass('active');
+  
+        tabParam = this.name.replace(/ /g, '_');
+        updateURLWithSearchParams();
+    }
+  
+    setInactive() {
+        $(`#${this.container} .tabs li.active`).removeClass('active');
+        $(`#${this.container} .tabContent .tabWindow.active`).removeClass('active');
+        Object.values(Tab.existingTabs)
+            .filter(tab => tab.container === this.container)
+            .forEach(tab => {
+                tab.active = false;
+            });
+    }
+  }
+  
+  // --- --- --- --- --- --- --- --- ---
+  let newTab = null;
+  let mainTab = null;
+  let infoTab = null;
+  
+  let transcriptsData = [];
+  let npcData = [];
+  const mergeData = [];
+  
+  function handleFetchError(error) {
+    console.error('Error:', error);
+  }
+  
+  const FETCH_TRANSCRIPTS = fetch('https://resources.talesoftibia.com/data/npcs/transcripts.json')
+    .then(response => response.json())
+    .catch(handleFetchError);
+  
+  const FETCH_NPC_DATA = fetch('https://resources.talesoftibia.com/data/npcs/npc-data.json')
+    .then(response => response.json())
+    .catch(handleFetchError);
+
+
+  
+  Promise.all([FETCH_TRANSCRIPTS, FETCH_NPC_DATA])
+    .then(([transcripts, npcDataResponse]) => {
+        transcriptsData = transcripts;
+        npcData = npcDataResponse;
+  
+        for (const OBJ_1 of npcData) {
+            for (const OBJ_2 of transcriptsData) {
+                if (OBJ_1.name === OBJ_2.name) {
+                    const MERGE_OBJ = { ...OBJ_1, ...OBJ_2 };
+                    mergeData.push(MERGE_OBJ);
+                    break;
+                }
+            }
+        }
+  
+        // Initialize tabs after data is loaded
+        $(document).ready(() => {
+            const npcInfoContent = $('#npc-info').html();
+            let resultsTab = new Tab('Results', false, false, 'tabContainer_1', false);
+            let infoTabInstance = new Tab('Info', false, false, 'tabContainer_1', true, npcInfoContent);
+  
+            mainTab = resultsTab; 
+            infoTab = infoTabInstance; 
+  
+            const urlParams = new URLSearchParams(window.location.search);
+            const specifiedTabName = urlParams.get('t');
+            const tabKey = `${specifiedTabName}-tabContainer_1`;
+  
+            if (Tab.existingTabs.hasOwnProperty(tabKey)) {
+                // Activate existing tab if found
+                Tab.existingTabs[tabKey].setActive();
+            } else {
+                // Create and activate a new tab or the default Results tab
+                specifiedTabName === 'Results' ? mainTab.setActive() : showSpecificObject(specifiedTabName);
+            }
+        
+            // Show information about the NPC taken from tab name
+            if (specifiedTabName !== 'Results') {
+                showInformation(specifiedTabName);
+            }
+  
+            setUpFormListeners()
+                .then(createPropertyLists)
+                .then(getURLParams)
+                .then(setFormSettings)
+                .then(saveFormValues)
+                .then(updateURLWithSearchParams)
+                .catch(function (error) {
+                    console.error('Error:', error);
+                });
+        });
+    })
+    .catch(handleFetchError);
+  // --- --- --- --- --- --- --- --- ---
+  
+  // Retrieving information from a form and listening for changes in the form.
+  let resultFilterOptionsForm = null;
+  // ---
+  let searchPhraseInput = null;
+  let autoSearchInput = null;
+  let searchPhraseInNpcNameInput = null;
+  let searchPhraseInNpcDialogueInput = null;
+  let searchPhraseInPlayerDialogueInput = null;
+  let searchModeInput = null;
+  let searchPhraseByRaceInput = null;
+  let searchPhraseByLocationInput = null;
+  let searchPhraseByJobInput = null;
+  let searchPhraseByVersionInput = null;
+  // ---
+  //let infoParam = null;
+  
+  function setUpFormListeners() {
+    resultFilterOptionsForm = document.forms.searchOptionsForm;
+    // ---
+    searchPhraseInput = resultFilterOptionsForm.elements.searchPhrase;
+    autoSearchInput = resultFilterOptionsForm.elements.autoSearch;
+    searchPhraseInNpcNameInput = resultFilterOptionsForm.elements.searchPhraseInNpcName;
+    searchPhraseInNpcDialogueInput = resultFilterOptionsForm.elements.searchPhraseInNpcDialogue;
+    searchPhraseInPlayerDialogueInput = resultFilterOptionsForm.elements.searchPhraseInPlayerDialogue;
+    searchModeInput = resultFilterOptionsForm.elements.searchMode;
+    searchPhraseByRaceInput = resultFilterOptionsForm.elements.searchPhraseByRace;
+    searchPhraseByLocationInput = resultFilterOptionsForm.elements.searchPhraseByLocation;
+    searchPhraseByJobInput = resultFilterOptionsForm.elements.searchPhraseByJob;
+    searchPhraseByVersionInput = resultFilterOptionsForm.elements.searchPhraseByVersion;
+  
+    // Listening for changes in the form.
+    function handleFormChange() {
+        saveFormValues().then(updateURLWithSearchParams);
+    }
+  
+    function handleSearchModeChange() {
+        saveFormValues().then(updateURLWithSearchParams);
+    }
+  
+    function handleInputDebounced() {
+        saveFormValues().then(updateURLWithSearchParams);
+    }
+  
+    resultFilterOptionsForm.addEventListener('submit', event => {
+        event.preventDefault();
+        saveFormValues().then(updateURLWithSearchParams);
+    });
+  
+    autoSearchInput.addEventListener('change', handleFormChange);
+  
+    searchPhraseInNpcNameInput.addEventListener('change', handleFormChange);
+    searchPhraseInNpcDialogueInput.addEventListener('change', handleFormChange);
+    searchPhraseInPlayerDialogueInput.addEventListener('change', handleFormChange);
+  
+    searchModeInput.forEach(radio => {
+        radio.addEventListener('change', handleSearchModeChange);
+    });
+  
+    searchPhraseByRaceInput.addEventListener('change', handleFormChange);
+    searchPhraseByLocationInput.addEventListener('change', handleFormChange);
+    searchPhraseByJobInput.addEventListener('change', handleFormChange);
+    searchPhraseByVersionInput.addEventListener('change', handleFormChange);
+  
+    let timer;
+    searchPhraseInput.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(handleInputDebounced, 50);
+    });
+  
+    return Promise.resolve();
+  }
+  // --- --- --- --- --- --- --- --- ---
+  
+  // A function that creates drop-down lists based on unique values.
+  function createPropertyLists() {
+    function uniqueValues(data, key) {
+        const uniqueVal = new Set();
+  
+        data.forEach(item => {
+            const val = item[key];
+            if (Array.isArray(val)) {
+                val.forEach(location => {
+                    uniqueVal.add(location);
+                });
+            } else {
+                uniqueVal.add(val);
+            }
+        });
+  
+        return Array.from(uniqueVal).sort();
+    }
+    /* const uniqueValues = (data, key) => [...new Set(data.map(item => item[key]))].sort(); */
+    const RACES_ARRAY = uniqueValues(npcData, 'race');
+    const RACES_OPTIONS = RACES_ARRAY.map(race => `<option value="${race}">${race}</option>`).join('');
+    $('#racesList').html(`<option selected>All</option>${RACES_OPTIONS}`);
+  
+    const LOCATIONS_ARRAY = uniqueValues(npcData, 'location');
+    const LOCATIONS_OPTIONS = LOCATIONS_ARRAY.map(location => `<option value="${location}">${location}</option>`).join('');
+    $('#locationsList').html(`<option selected>All</option>${LOCATIONS_OPTIONS}`);
+  
+    const JOBS_ARRAY = uniqueValues(npcData, 'job');
+    const JOBS_OPTIONS = JOBS_ARRAY.map(job => `<option value="${job}">${job}</option>`).join('');
+    $('#jobsList').html(`<option selected>All</option>${JOBS_OPTIONS}`);
+  
+    const VERSIONS_ARRAY = uniqueValues(npcData, 'version');
+    const VERSIONS_OPTIONS = VERSIONS_ARRAY.map(version => `<option value="${version}">${version}</option>`).join('');
+    $('#versionsList').html(`<option selected>All</option>${VERSIONS_OPTIONS}`);
+  
+    return Promise.resolve();
+  }
+  // --- --- --- --- --- --- --- --- ---
+  
+  // --- --- --- --- --- --- --- --- ---
+  let searchParam = '';
+  let autoParam = '';
+  let nameParam = '';
+  let responseParam = '';
+  let keywordParam = '';
+  let modeParam = '';
+  let raceParam = '';
+  let locationParam = '';
+  let jobParam = '';
+  let versionParam = '';
+  let infoParam = '';
+  let tabParam = '';
+  
+  function getURLParams() {
+    searchParam = String(getQueryParam('s'));
+    autoParam = getQueryParam('a') === '1'; // '1' for true, '0' for false
+    nameParam = getQueryParam('n') === '1';
+    responseParam = getQueryParam('r') === '1';
+    keywordParam = getQueryParam('k') === '1';
+    modeParam = getQueryParam('m');
+    raceParam = String(getQueryParam('rc'));
+    locationParam = String(getQueryParam('l'));
+    jobParam = String(getQueryParam('j'));
+    versionParam = String(getQueryParam('v'));
+    //infoParam = String(getQueryParam('i'));
+    tabParam = String(getQueryParam('t'));
+  
+    return Promise.resolve();
+  }
+  
+  
+  const URL_PARAMS = new URLSearchParams(window.location.search);
+  const AVAILABLE_PARAMS_NAMES = ['s', 'a', 'n', 'r', 'k', 'm', 'rc', 'l', 'j', 'v', 't'];
+  const DEFAULT_PARAMS_VALUES = ['', '1', '1', '1', '1', '1', 'All', 'All', 'All', 'All', 'Results'];
+  //const AVAILABLE_PARAMS_NAMES = ['s', 'a', 'n', 'r', 'k', 'm', 'rc', 'l', 'j', 'v', 'i', 't'];
+  //const DEFAULT_PARAMS_VALUES = ['', '1', '1', '1', '1', '1', 'All', 'All', 'All', 'All', '', 'Results'];
+  
+  function getQueryParam(paramName) {
+    let paramValue = URL_PARAMS.get(paramName);
+  
+    if (paramValue === null && AVAILABLE_PARAMS_NAMES.includes(paramName)) {
+        const INDEX = AVAILABLE_PARAMS_NAMES.indexOf(paramName);
+        paramValue = DEFAULT_PARAMS_VALUES[INDEX];
+    } else {
+        paramValue = validateParam(paramName, paramValue);
+    }
+  
+    return paramValue;
+  }
+  
+  function validateParam(paramName, paramValue) {
+    const INDEX = AVAILABLE_PARAMS_NAMES.indexOf(paramName);
+  
+    if (INDEX !== -1) {
+        switch (paramName) {
+            case 'm':
+                if (!['1', '2'].includes(paramValue)) {
+                    paramValue = DEFAULT_PARAMS_VALUES[INDEX];
+                }
+                break;
+            case 'a': // 'auto' shortened to 'a'
+            case 'n': // 'name' shortened to 'n'
+            case 'r': // 'response' shortened to 'r'
+            case 'k': // 'keyword' shortened to 'k'
+                if (!['1', '0'].includes(paramValue)) {
+                    paramValue = DEFAULT_PARAMS_VALUES[INDEX];
+                }
+                break;
+        }
+    } else {
+        paramValue = '';
+    }
+  
+    return paramValue;
+  }
+  // --- --- --- --- --- --- --- --- ---
+  
+  // This function sets the form inputs values and settings based on the provided parameters.
+  function setFormSettings() {
+    searchPhraseInput.value = searchParam;
+    autoSearchInput.checked = autoParam;
+    searchPhraseInNpcNameInput.checked = nameParam;
+    searchPhraseInNpcDialogueInput.checked = responseParam;
+    searchPhraseInPlayerDialogueInput.checked = keywordParam;
+  
+    for (const input of searchModeInput) {
+        if (input.value === modeParam) {
+            input.checked = true;
+            break;
+        }
+    }
+  
+    for (const option of searchPhraseByRaceInput.options) {
+        if (option.value === raceParam) {
+            option.selected = true;
+            break;
+        }
+    }
+  
+    for (const option of searchPhraseByLocationInput.options) {
+        if (option.value === locationParam) {
+            option.selected = true;
+            break;
+        }
+    }
+  
+    for (const option of searchPhraseByJobInput.options) {
+        if (option.value === jobParam) {
+            option.selected = true;
+            break;
+        }
+    }
+  
+    for (const option of searchPhraseByVersionInput.options) {
+        if (option.value === versionParam) {
+            option.selected = true;
+            break;
+        }
+    }
+  
+    // ---
+    if (infoParam !== '') {
+        showInformation(infoParam);
+    }
+    
+    return Promise.resolve();
+  }
+  // --- --- --- --- --- --- --- --- ---
+  
+  // This function save the form input values to the appropriate variables.
+  let searchPhraseValue = '';
+  let autoSearchValue = true;
+  let searchPhraseInNpcNameValue = true;
+  let searchPhraseInNpcDialogueValue = true;
+  let searchPhraseInPlayerDialogueValue = true;
+  let searchModeValue = 1;
+  let searchPhraseByRaceValue = 'All';
+  let searchPhraseByLocationValue = 'All';
+  let searchPhraseByJobValue = 'All';
+  let searchPhraseByVersionValue = 'All';
+  
+  function saveFormValues() {
+    searchPhraseValue = String(searchPhraseInput.value);
+    autoSearchValue = Boolean(autoSearchInput.checked);
+    searchPhraseInNpcNameValue = Boolean(searchPhraseInNpcNameInput.checked);
+    searchPhraseInNpcDialogueValue = Boolean(searchPhraseInNpcDialogueInput.checked);
+    searchPhraseInPlayerDialogueValue = Boolean(searchPhraseInPlayerDialogueInput.checked);
+  
+    searchModeInput.forEach(radio => {
+        if (radio.checked) {
+            searchModeValue = Number(radio.value);
+        }
+    });
+    searchPhraseByRaceValue = String(searchPhraseByRaceInput.value);
+    searchPhraseByLocationValue = String(searchPhraseByLocationInput.value);
+    searchPhraseByJobValue = String(searchPhraseByJobInput.value);
+    searchPhraseByVersionValue = String(searchPhraseByVersionInput.value);
+  
+    if (searchPhraseValue.length > 2 || searchModeValue === 2) {
+        searchSpecificObject(searchPhraseValue);
+    } else {
+        mainTab.enterContent('');
+    }
+  
+    return Promise.resolve();
+  }
+  // --- --- --- --- --- --- --- --- ---
+  
+  // This function updates the URL with the selected search params.
+  function updateURLWithSearchParams() {
+    const URL_PARAMS = {
+      s: searchPhraseValue,           // 'search' shortened to 's'
+      a: autoSearchValue ? '1' : '0', // 'auto' shortened to 'a' and boolean converted to '1' or '0'
+      n: searchPhraseInNpcNameValue ? '1' : '0',       // 'name' parameter
+      r: searchPhraseInNpcDialogueValue ? '1' : '0',   // 'response' parameter
+      k: searchPhraseInPlayerDialogueValue ? '1' : '0',    // 'keyword' parameter
+      m: searchModeValue,             // 'mode' shortened to 'm'
+      rc: searchPhraseByRaceValue,    // 'race' shortened to 'rc'
+      l: searchPhraseByLocationValue, // 'location' shortened to 'l'
+      j: searchPhraseByJobValue,      // 'job' shortened to 'j'
+      v: searchPhraseByVersionValue,  // 'version' shortened to 'v'
+      //i: infoParam,                   // 'info' shortened to 'i'
+      t: tabParam                     // 'tab' shortened to 't'
+    };
+  
+    const NEW_URL = new URL(window.location.href);
+  
+    Object.keys(URL_PARAMS).forEach(paramName => {
+      const paramValue = String(URL_PARAMS[paramName]);
+      const defaultValue = String(DEFAULT_PARAMS_VALUES[paramName] || '');
+  
+      // If the param is not in the URL_PARAMS or its value is default, remove it.
+      if (!paramValue || paramValue === defaultValue || paramValue === 'All' || paramValue === 'Results' || paramValue === '1' || paramValue === 'null' || paramValue === 'Info') {
+          NEW_URL.searchParams.delete(paramName);
+      } else {
+          // If the param value is not default, set or update it.
+          NEW_URL.searchParams.set(paramName, paramValue);
+      }
+    });
+  
+    window.history.replaceState({}, '', NEW_URL.href);
+  
+    return Promise.resolve();
+  }
+  // --- --- --- --- --- --- --- --- ---
+  
+  // A function that searches for player dialogues with NPCs based on keywords.
+  function searchSpecificObject(keyword) {
+    console.time('search');
+    const preparedKeyword = keyword.toLowerCase().trim();
+    const KEYWORD_REGEX = new RegExp(transformInput(preparedKeyword), 'gium');
+    console.log('keyword regex:', KEYWORD_REGEX);
+  
+    const NPC_TRANSCRIPTS_MAP = new Map();
+  
+    for (const obj of mergeData) {
+        const { name, race, location, job, version /*, dialogues */ } = obj;
+  
+        const FILTERED_NPC_TRANSCRIPTS = obj.conversation.filter(conv => {
+            const { prompt, answer } = conv;
+  
+            if (searchModeValue === 1 &&
+                (
+                    (
+                        searchPhraseInPlayerDialogueValue && !searchPhraseInNpcDialogueValue && !searchPhraseInNpcNameValue && (
+                            KEYWORD_REGEX.test(prompt)
+                        )
+                    ) || (
+                        searchPhraseInNpcDialogueValue && !searchPhraseInPlayerDialogueValue && !searchPhraseInNpcNameValue && (
+                            answer.some(ans => KEYWORD_REGEX.test(ans))
+                        )
+                    ) || (
+                        searchPhraseInNpcNameValue && !searchPhraseInPlayerDialogueValue && !searchPhraseInNpcDialogueValue && (
+                            KEYWORD_REGEX.test(
+                                name.toLowerCase().replace(/_/g, ' ')
+                            )
+                        )
+                    ) || (
+                        searchPhraseInPlayerDialogueValue && searchPhraseInNpcDialogueValue && searchPhraseInNpcNameValue && (
+                            answer.some(ans => KEYWORD_REGEX.test(
+                                (ans + ' ' + prompt + ' ' + name.replace(/_/g, ' '))
+                            )
+                            )
+                        )
+                    ) || (
+                        searchPhraseInPlayerDialogueValue && searchPhraseInNpcNameValue && !searchPhraseInNpcDialogueValue && (
+                            KEYWORD_REGEX.test(
+                                (prompt + ' ' + name.replace(/_/g, ' '))
+                            )
+                        )
+                    ) || (
+                        searchPhraseInNpcDialogueValue && searchPhraseInNpcNameValue && !searchPhraseInPlayerDialogueValue && (
+                            answer.some(ans => KEYWORD_REGEX.test(
+                                (ans + ' ' + name.replace(/_/g, ' '))
+                            )
+                            )
+                        )
+                    ) || (
+                        searchPhraseInNpcDialogueValue && searchPhraseInPlayerDialogueValue && !searchPhraseInNpcNameValue && (
+                            answer.some(ans => KEYWORD_REGEX.test(
+                                (ans + ' ' + prompt)
+                            )
+                            )
+                        )
+                    )
+                ) &&
+                (
+                    (race === searchPhraseByRaceValue || searchPhraseByRaceValue === 'All') &&
+                    (location === searchPhraseByLocationValue || searchPhraseByLocationValue === 'All') &&
+                    (job === searchPhraseByJobValue || searchPhraseByJobValue === 'All') &&
+                    (version === searchPhraseByVersionValue || searchPhraseByVersionValue === 'All')
+                )
+            ) {
+                return true;
+            } else if (searchModeValue === 2 &&
+                (
+                    (race === searchPhraseByRaceValue || searchPhraseByRaceValue === 'All') &&
+                    (location === searchPhraseByLocationValue || searchPhraseByLocationValue === 'All') &&
+                    (job === searchPhraseByJobValue || searchPhraseByJobValue === 'All') &&
+                    (version === searchPhraseByVersionValue || searchPhraseByVersionValue === 'All')
+                )
+            ) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+  
+        if (FILTERED_NPC_TRANSCRIPTS.length === 0) continue;
+  
+        if (!NPC_TRANSCRIPTS_MAP.has(obj.name)) {
+            NPC_TRANSCRIPTS_MAP.set(obj.name, []);
+        }
+  
+        NPC_TRANSCRIPTS_MAP.get(obj.name).push(...FILTERED_NPC_TRANSCRIPTS);
+    }
+
+    let result = preparedKeyword.replace(/'(?!\w)|(?<!\w)'/g, '\\b').replace(/\(([^)]*)\)/g, '$1').replace(/[&|]/g, ',').trim();
+    console.log('Result:', result);
+    result = result.endsWith(',') ? result.slice(0, -1) : result;
+    console.log('Result after:', result);
+    const keyWordsArray = result.split(',').map(word => word.trim());
+    const KEYWORDS_REGEX = new RegExp(`\\b([a-zA-Z0-9'-]*(${keyWordsArray.join('|')})[a-zA-Z0-9'-]*)\\b`, 'igu');
+    
+
+    let NPC_CONV_ARRAY_DIV_CONTENT = null;
+  
+    if (searchModeValue === 1) {
+        NPC_CONV_ARRAY_DIV_CONTENT = [...NPC_TRANSCRIPTS_MAP].map(([npcName, transcripts]) => `
+            <div class="npcBoxContent">
+                <div
+                  onClick="event.stopPropagation(); showSpecificObject(\`${npcName}\`); showInformation(\`${npcName}\`);"
+                  style="background-image: url('https://resources.talesoftibia.com/images/npcs/${npcName.replace(/'/g, "\\'")}.png')">
+                </div>
+                <div>
+                    ${transcripts.map(conv => `
+                        <a>Player: ${conv.prompt}</a>
+                        ${conv.answer.map(ans => `
+                            <p>${npcName.replace(/_/g, ' ')}: ${searchModeValue === 1
+                ? ans.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+                    .replace(KEYWORDS_REGEX, '<a>$1</a>')
+                : ans.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}</p>
+                        `).join('')}
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+    } else {
+        NPC_CONV_ARRAY_DIV_CONTENT = '<div class="allNpcBox">' + [...NPC_TRANSCRIPTS_MAP].map(([npcName]) => `
+            <div class="npcBox" onClick="showSpecificObject(\`${npcName}\`); showInformation(\`${npcName}\`);">
+                <div class="npcName npcNameColor">${npcName.replace(/_/g, ' ')}</div>
+                <div class="npcAppearance" style="background-image: url('https://resources.talesoftibia.com/images/npcs/${npcName.replace(/'/g, "\\'")}.png')">
+                </div>
+            </div>
+        `).join('') + '</div>';
+    }
+  
+    mainTab.enterContent(NPC_CONV_ARRAY_DIV_CONTENT);
+  
+    // Get the 'tab' parameter from the URL directly here
+    const urlParams = new URLSearchParams(window.location.search);
+    const specifiedTabName = urlParams.get('t');
+  
+    // Activate the Results tab if the 'tab' parameter is not specified or is 'Results'
+    if (!specifiedTabName || specifiedTabName === 'Results') {
+        mainTab.setActive();
+    }
+  
+    console.timeEnd('search');
+  }
+  
+  // --- --- --- --- --- --- --- --- ---
+  
+  // A function that displays the player's dialogues with the NPC based on the name of the npc.
+  // eslint-disable-next-line no-unused-vars
+  function showSpecificObject(objName) {
+  
+    const FOUND_OBJ = transcriptsData.find(obj => obj.name === objName);
+    if (!FOUND_OBJ) {
+        return false;
+    }
+  
+    const tabKey = `${objName}-tabContainer_1`; // Unique key for the tab
+    if (!Tab.existingTabs.hasOwnProperty(tabKey)) {
+      // Check if the tab exists, if not create a new one, otherwise activate it
+      const OBJ_DIV_CONTENT = `
+          <div class="npcBoxContent">
+              <div
+                  onClick="showInformation(\`${FOUND_OBJ.name}\`);"
+                  style="background-image: url('https://resources.talesoftibia.com/images/npcs/${FOUND_OBJ.name.replace(/'/g, "\\'")}.png')">
+              </div>
+              <div>
+                  ${FOUND_OBJ.conversation.map(conv => `
+                      <a>Player: ${conv.prompt}</a>
+                      ${conv.answer.map(ans => `
+                          <p>${FOUND_OBJ.name.replace(/_/g, ' ')}: ${ans.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}</p>
+                      `).join('')}
+                  `).join('')}
+              </div>
+          </div>
+      `;
+  
+      Tab.existingTabs[tabKey] = new Tab(objName.replace(/_/g, ' '), true, true, 'tabContainer_1', false, OBJ_DIV_CONTENT);
+  
+    } else {
+        Tab.existingTabs[tabKey].setActive();
+    }
+  }
+  
+  
+  // A function that displays infoParam.
+  function showInformation(objName) {
+    const INFO_DIV = $('#npc-info');
+    const FOUND_OBJ = npcData.find(obj => obj.name === objName);
+  
+    if (FOUND_OBJ) {
+        const INFO_DIV_CONTENT = `
+        <div class="npcMonologues bottomSpace10M">
+            ${FOUND_OBJ.dialogues.map(dialogue => `<p class="npcMonologueFormat npcMonologueColor">${dialogue}</p>`).join('')}
+        </div>
+            <div class="npcName npcNameColor">${FOUND_OBJ.name.replace(/_/g, ' ')}</div>
+            <div class="npcAppearance bottomSpace10M" 
+            style="background-image: url('https://resources.talesoftibia.com/images/npcs/${FOUND_OBJ.name.replace(/ /g, '_').replace(/'/g, "\\'")}.png')"></div>
+            <div class="npcInformation bottomSpace10M">
+                <table class="tibiaStyleTable userSelectLock">
+                    <tbody class="tibiaStyleTbody">
+                        <tr class="tibiaStyleTr">
+                            <td class="tibiaStyleTd">Job</td>
+                            <td class="tibiaStyleTd">${FOUND_OBJ.job}</td>
+                        </tr>
+                        <tr class="tibiaStyleTr">
+                            <td class="tibiaStyleTd">Race</td>
+                            <td class="tibiaStyleTd">${FOUND_OBJ.race}</td>
+                        </tr>
+                        <tr class="tibiaStyleTr">
+                            <td class="tibiaStyleTd">Gender</td>
+                            <td class="tibiaStyleTd">${FOUND_OBJ.gender}</td>
+                        </tr>
+                        <tr class="tibiaStyleTr">
+                            <td class="tibiaStyleTd">Location</td>
+                            <td class="tibiaStyleTd">${FOUND_OBJ.location}${FOUND_OBJ.subarea ? ` &nbsp;⮞&nbsp; ${FOUND_OBJ.subarea}` : ''}</td>
+                        </tr>
+                        <tr class="tibiaStyleTr">
+                            <td class="tibiaStyleTd">Version</td>
+                            <td class="tibiaStyleTd">${FOUND_OBJ.version}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            ${FOUND_OBJ.map[0] !== ''
+                ? `
+                    <div class="npcLocation">
+                        <a class="tibiaStyleButtonType1 bottomSpace10M" href="${FOUND_OBJ.map}" target="_blank">NPC Location</a>
+                    </div>
+                `
+                : ''}
+            ${FOUND_OBJ.quests.length !== 0
+                ? `
+                    <p class="tibiaStyleParagraph userSelectLock">Related Quests:</p>
+                    <div class="npcQuests topSpace10M bottomSpace10M">
+                        ${FOUND_OBJ.quests.map(quest => `<a class="tibiaStyleButtonType1 bottomSpace10M" href="${quest['quest-url']}" target="_blank">${quest['quest-name']}</a>`).join('')}
+                        <div style="width: 100%; height: 1px;"></div>
+                    </div>
+                `
+                : ''}
+        `;
+        infoParam = objName;
+        updateURLWithSearchParams();
+  
+        INFO_DIV.empty().html(INFO_DIV_CONTENT);
+        infoTab.enterContent(INFO_DIV_CONTENT);
+  
+    } else {
+        return false;
+    }
+  }
+  
+  // --- --- --- --- --- --- --- --- ---
+  
+  $(document).ready(() => {
+    const searchOptionsElement = $('#options');
+    const toggleButtonElement = $('#options-button');
+  
+    const handleWindowResize = () => {
+      if ($(window).width() > 900) {
+          searchOptionsElement.css({
+              display: ''
+          });
+          if (infoTab.active === true) {
+              mainTab.setActive();
+          }
+      }
+    };
+  
+    const handleToggleButton = () => {
+        if (searchOptionsElement.css('display') === 'none') {
+            searchOptionsElement.css({
+                display: 'flex'
+            });
+        } else {
+            searchOptionsElement.css('display', 'none');
+        }
+    };
+  
+    toggleButtonElement.click((event) => {
+        handleToggleButton();
+        event.stopPropagation();
+    });
+  
+    $(window).resize(handleWindowResize);
+  });
+  
+  function transformInput(input) {
+    //console.log("Original Input: ", input);
+
+    // Normalize spaces and lowercase the input for uniform processing.
+    input = input.toLowerCase().replace(/\s+/g, ' ').trim();
+    //console.log("Normalized Input: ", input);
+
+    // Escape all characters that could affect regex operations, except for logical operators & and |.
+    const escapedInput = input.replace(/([.*+?^${}()|\[\]\\\/])/g, '\\$1')
+                              .replace(/\\\&/g, '&').replace(/\\\|/g, '|');
+    //console.log("Escaped Input: ", escapedInput);
+
+    // Replace single-quoted words with word boundaries.
+    const wordBoundaryHandled = escapedInput.replace(/'(\w+)'/g, '\\b$1\\b');
+
+    // Handle complex logical expressions by translating & and | into regex logical operators.
+    // This needs to be done carefully to ensure that each part is properly encapsulated.
+    let regexParts = wordBoundaryHandled.split('&').map(part =>
+        part.split('|').map(p => `(?=.*${p})`).join('|')
+    );
+
+    // Join all parts that were split by & with the necessary grouping for AND logic
+    const regexPattern = `^(?:${regexParts.join('')})`;
+    //console.log("Regex Pattern: ", regexPattern);
+
+    return regexPattern;
+}
+
+
+  
+  
