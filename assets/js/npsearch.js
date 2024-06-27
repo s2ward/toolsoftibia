@@ -123,11 +123,11 @@ class Tab {
     console.error('Error:', error);
   }
   
-  const FETCH_TRANSCRIPTS = fetch('https://resources.talesoftibia.com/data/npcs/transcripts.json')
+  const FETCH_TRANSCRIPTS = fetch('https://resources.talesoftibia.com/data/npcs/npc_transcript_database.json')
     .then(response => response.json())
     .catch(handleFetchError);
   
-  const FETCH_NPC_DATA = fetch('https://resources.talesoftibia.com/data/npcs/npc-data.json')
+  const FETCH_NPC_DATA = fetch('https://resources.talesoftibia.com/data/npcs/npc_metadata.json')
     .then(response => response.json())
     .catch(handleFetchError);
 
@@ -794,29 +794,31 @@ class Tab {
   });
   
   function transformInput(input) {
-    //console.log("Original Input: ", input);
+    console.log("Original Input: ", input);
 
     // Normalize spaces and lowercase the input for uniform processing.
     input = input.toLowerCase().replace(/\s+/g, ' ').trim();
-    //console.log("Normalized Input: ", input);
+    console.log("Normalized Input: ", input);
 
-    // Escape all characters that could affect regex operations, except for logical operators & and |.
-    const escapedInput = input.replace(/([.*+?^${}()|\[\]\\\/])/g, '\\$1')
-                              .replace(/\\\&/g, '&').replace(/\\\|/g, '|');
-    //console.log("Escaped Input: ", escapedInput);
+    // Split the input by '&' to handle AND operations
+    const andParts = input.split('&').map(part => part.trim());
 
-    // Replace single-quoted words with word boundaries.
-    const wordBoundaryHandled = escapedInput.replace(/'(\w+)'/g, '\\b$1\\b');
+    // Process each AND part
+    const processedParts = andParts.map(part => {
+        // Escape special regex characters, except '|'
+        const escapedPart = part.replace(/([.*+?^${}()[\]\\])/g, '\\$1');
 
-    // Handle complex logical expressions by translating & and | into regex logical operators.
-    // This needs to be done carefully to ensure that each part is properly encapsulated.
-    let regexParts = wordBoundaryHandled.split('&').map(part =>
-        part.split('|').map(p => `(?=.*${p})`).join('|')
-    );
+        // Replace single-quoted words with word boundaries
+        const wordBoundaryHandled = escapedPart.replace(/'(\w+)'/g, '\\b$1\\b');
 
-    // Join all parts that were split by & with the necessary grouping for AND logic
-    const regexPattern = `^(?:${regexParts.join('')})`;
-    //console.log("Regex Pattern: ", regexPattern);
+        // Handle OR operations within each AND part
+        const orParts = wordBoundaryHandled.split('|').map(p => p.trim());
+        return orParts.map(p => `(?=.*${p})`).join('|');
+    });
+
+    // Join all parts with positive lookaheads for AND logic
+    const regexPattern = `^${processedParts.map(part => `(?=${part})`).join('')}.*$`;
+    console.log("Regex Pattern: ", regexPattern);
 
     return regexPattern;
 }
